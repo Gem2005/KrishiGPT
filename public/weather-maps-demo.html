@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KrishiGPT Weather Maps Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #2d5f3f;
+            margin-bottom: 30px;
+        }
+        .demo-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .demo-section h3 {
+            color: #2d5f3f;
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .btn {
+            background-color: #2d5f3f;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .btn:hover {
+            background-color: #1a3a28;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #2d5f3f;
+        }
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .map-item {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .map-item h4 {
+            margin: 0;
+            padding: 10px;
+            background-color: #2d5f3f;
+            color: white;
+            font-size: 14px;
+        }
+        .map-item img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .map-item .info {
+            padding: 10px;
+            font-size: 12px;
+            background-color: #f8f9fa;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            border: 1px solid #f8bbd9;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .response-json {
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌦️ KrishiGPT Weather Maps Demo</h1>
+            <p>Test OpenWeatherMap weather maps integration for agricultural insights</p>
+        </div>
+
+        <!-- Current Weather Maps -->
+        <div class="demo-section">
+            <h3>📍 Current Weather Maps</h3>
+            <div class="form-group">
+                <label for="currentLocation">Location:</label>
+                <input type="text" id="currentLocation" value="Delhi" placeholder="Enter city name">
+            </div>
+            <div class="form-group">
+                <label for="currentLayers">Weather Layers:</label>
+                <select id="currentLayers" multiple>
+                    <option value="clouds_new" selected>Clouds</option>
+                    <option value="precipitation_new" selected>Precipitation</option>
+                    <option value="temp_new" selected>Temperature</option>
+                    <option value="pressure_new">Pressure</option>
+                    <option value="wind_new">Wind</option>
+                    <option value="rain_new">Rain</option>
+                    <option value="snow_new">Snow</option>
+                </select>
+            </div>
+            <button class="btn" onclick="loadCurrentMaps()">Load Current Weather Maps</button>
+            <button class="btn" onclick="showCurrentJSON()">Show JSON Response</button>
+            <div id="currentResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Forecast Weather Maps -->
+        <div class="demo-section">
+            <h3>📊 Forecast Weather Maps</h3>
+            <div class="form-group">
+                <label for="forecastLocation">Location:</label>
+                <input type="text" id="forecastLocation" value="Mumbai" placeholder="Enter city name">
+            </div>
+            <div class="form-group">
+                <label for="forecastDays">Forecast Days (1-10):</label>
+                <input type="number" id="forecastDays" min="1" max="10" value="5">
+            </div>
+            <div class="form-group">
+                <label for="forecastLayer">Weather Layer:</label>
+                <select id="forecastLayer">
+                    <option value="precipitation_new" selected>Precipitation</option>
+                    <option value="clouds_new">Clouds</option>
+                    <option value="temp_new">Temperature</option>
+                    <option value="pressure_new">Pressure</option>
+                    <option value="wind_new">Wind</option>
+                </select>
+            </div>
+            <button class="btn" onclick="loadForecastMaps()">Load Forecast Maps</button>
+            <button class="btn" onclick="showForecastJSON()">Show JSON Response</button>
+            <div id="forecastResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Historical Weather Maps -->
+        <div class="demo-section">
+            <h3>📈 Historical Weather Maps</h3>
+            <div class="form-group">
+                <label for="historicalLocation">Location:</label>
+                <input type="text" id="historicalLocation" value="Chennai" placeholder="Enter city name">
+            </div>
+            <div class="form-group">
+                <label for="startDate">Start Date:</label>
+                <input type="date" id="startDate" value="2024-12-01">
+            </div>
+            <div class="form-group">
+                <label for="endDate">End Date:</label>
+                <input type="date" id="endDate" value="2024-12-03">
+            </div>
+            <div class="form-group">
+                <label for="historicalLayer">Weather Layer:</label>
+                <select id="historicalLayer">
+                    <option value="precipitation_new" selected>Precipitation</option>
+                    <option value="temp_new">Temperature</option>
+                    <option value="clouds_new">Clouds</option>
+                    <option value="pressure_new">Pressure</option>
+                </select>
+            </div>
+            <button class="btn" onclick="loadHistoricalMaps()">Load Historical Maps</button>
+            <button class="btn" onclick="showHistoricalJSON()">Show JSON Response</button>
+            <div id="historicalResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+        let forecastData = null;
+        let historicalData = null;
+
+        async function loadCurrentMaps() {
+            const location = document.getElementById('currentLocation').value;
+            const layersSelect = document.getElementById('currentLayers');
+            const selectedLayers = Array.from(layersSelect.selectedOptions).map(option => option.value);
+            const result = document.getElementById('currentResult');
+            
+            if (!location.trim()) {
+                result.innerHTML = '<div class="error">Please enter a location</div>';
+                result.style.display = 'block';
+                return;
+            }
+
+            result.innerHTML = '<div class="loading">Loading current weather maps...</div>';
+            result.style.display = 'block';
+
+            try {
+                const url = `/api/weather/maps?location=${encodeURIComponent(location)}&type=current&layers=${selectedLayers.join(',')}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                currentData = data;
+
+                if (data.success) {
+                    displayMaps(data.maps, result, 'Current Weather Maps');
+                } else {
+                    result.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadForecastMaps() {
+            const location = document.getElementById('forecastLocation').value;
+            const days = document.getElementById('forecastDays').value;
+            const layer = document.getElementById('forecastLayer').value;
+            const result = document.getElementById('forecastResult');
+            
+            if (!location.trim()) {
+                result.innerHTML = '<div class="error">Please enter a location</div>';
+                result.style.display = 'block';
+                return;
+            }
+
+            result.innerHTML = '<div class="loading">Loading forecast weather maps...</div>';
+            result.style.display = 'block';
+
+            try {
+                const url = `/api/weather/maps?location=${encodeURIComponent(location)}&type=forecast&days=${days}&layer=${layer}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                forecastData = data;
+
+                if (data.success) {
+                    displayMaps(data.maps, result, `${days}-Day Forecast Maps`);
+                } else {
+                    result.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadHistoricalMaps() {
+            const location = document.getElementById('historicalLocation').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const layer = document.getElementById('historicalLayer').value;
+            const result = document.getElementById('historicalResult');
+            
+            if (!location.trim() || !startDate || !endDate) {
+                result.innerHTML = '<div class="error">Please fill in all fields</div>';
+                result.style.display = 'block';
+                return;
+            }
+
+            result.innerHTML = '<div class="loading">Loading historical weather maps...</div>';
+            result.style.display = 'block';
+
+            try {
+                const url = `/api/weather/maps?location=${encodeURIComponent(location)}&type=historical&startDate=${startDate}&endDate=${endDate}&layer=${layer}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                historicalData = data;
+
+                if (data.success) {
+                    displayMaps(data.maps, result, 'Historical Weather Maps');
+                } else {
+                    result.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        function displayMaps(maps, resultElement, title) {
+            if (!maps || maps.length === 0) {
+                resultElement.innerHTML = '<div class="error">No maps available</div>';
+                return;
+            }
+
+            let html = `<h4>${title} (${maps.length} maps)</h4><div class="map-grid">`;
+            
+            maps.forEach((map, index) => {
+                const timestamp = map.timestamp ? new Date(map.timestamp * 1000).toLocaleDateString() : 'Current';
+                html += `
+                    <div class="map-item">
+                        <h4>${map.description || map.layer}</h4>
+                        <img src="${map.url}" alt="${map.layer}" onerror="this.style.display='none'; this.nextElementSibling.innerHTML='<div class=error>Image failed to load</div>'">
+                        <div class="info">
+                            <strong>Layer:</strong> ${map.layer}<br>
+                            <strong>Date:</strong> ${timestamp}<br>
+                            <strong>Coordinates:</strong> ${map.coordinates ? `${map.coordinates.zoom}/${map.coordinates.x}/${map.coordinates.y}` : 'N/A'}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            resultElement.innerHTML = html;
+        }
+
+        function showCurrentJSON() {
+            showJSON(currentData, 'currentResult');
+        }
+
+        function showForecastJSON() {
+            showJSON(forecastData, 'forecastResult');
+        }
+
+        function showHistoricalJSON() {
+            showJSON(historicalData, 'historicalResult');
+        }
+
+        function showJSON(data, resultId) {
+            const result = document.getElementById(resultId);
+            if (!data) {
+                result.innerHTML = '<div class="error">No data available. Please load maps first.</div>';
+                result.style.display = 'block';
+                return;
+            }
+
+            result.innerHTML = `<h4>JSON Response:</h4><div class="response-json">${JSON.stringify(data, null, 2)}</div>`;
+            result.style.display = 'block';
+        }
+
+        // Load current maps on page load
+        window.onload = function() {
+            loadCurrentMaps();
+        };
+    </script>
+</body>
+</html>

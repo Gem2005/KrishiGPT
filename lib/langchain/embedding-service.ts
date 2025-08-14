@@ -51,8 +51,7 @@ export class EmbeddingService {
           "google",
           new GoogleGenerativeAIEmbeddings({
             apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-            modelName: "embedding-001",
-            title: "Agricultural Knowledge Embedding",
+            model: "text-embedding-004", // Use latest model
           }),
         )
         console.log("Google embeddings initialized")
