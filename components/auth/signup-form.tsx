@@ -1,19 +1,18 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { Eye, EyeOff, Loader2, Phone, Facebook, Mail } from "lucide-react"
 import Link from "next/link"
 
 export function SignupForm() {
+  const [mode, setMode] = useState<"email" | "phone">("email")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -22,8 +21,11 @@ export function SignupForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
-  const router = useRouter()
+  const [phone, setPhone] = useState("")
+  const [otpSent, setOtpSent] = useState(false)
+  const [otp, setOtp] = useState("")
 
+  // Email/password signup
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -48,7 +50,9 @@ export function SignupForm() {
         email,
         password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/chat`,
+          emailRedirectTo:
+            process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL ||
+            `${window.location.origin}/chat`,
           data: {
             full_name: fullName,
           },
@@ -60,6 +64,75 @@ export function SignupForm() {
       } else {
         setSuccess("Check your email for the confirmation link!")
       }
+    } catch (err: any) {
+      setError("An unexpected error occurred")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Phone OTP signup
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError("")
+    setSuccess("")
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithOtp({
+        phone,
+      })
+      if (error) {
+        setError(error.message)
+      } else {
+        setOtpSent(true)
+        setSuccess("OTP sent! Please check your phone.")
+      }
+    } catch (err) {
+      setError("An unexpected error occurred")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError("")
+    setSuccess("")
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.verifyOtp({
+        phone,
+        token: otp,
+        type: "sms",
+      })
+      if (error) {
+        setError(error.message)
+      } else {
+        setSuccess("Phone verified! Account created.")
+      }
+    } catch (err) {
+      setError("An unexpected error occurred")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // OAuth signup
+  const handleOAuth = async (provider: "google" | "facebook") => {
+    setIsLoading(true)
+    setError("")
+    setSuccess("")
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/chat`,
+        },
+      })
+      if (error) setError(error.message)
     } catch (err) {
       setError("An unexpected error occurred")
     } finally {
@@ -74,101 +147,207 @@ export function SignupForm() {
         <CardDescription>Create your account to get started</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSignup} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={mode === "email" ? "default" : "outline"}
+            onClick={() => setMode("email")}
+            className="flex-1"
+            type="button"
+          >
+            <Mail className="mr-2 h-4 w-4" /> Email
+          </Button>
+          <Button
+            variant={mode === "phone" ? "default" : "outline"}
+            onClick={() => setMode("phone")}
+            className="flex-1"
+            type="button"
+          >
+            <Phone className="mr-2 h-4 w-4" /> Phone
+          </Button>
+        </div>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert className="mb-4">
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
 
-          {success && (
-            <Alert>
-              <AlertDescription>{success}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
-            <Input
-              id="fullName"
-              type="text"
-              value={fullName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFullName(e.target.value)}
-              placeholder="Enter your full name"
-              required
-              disabled={isLoading}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              required
-              disabled={isLoading}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
+        {/* Email/password signup */}
+        {mode === "email" && (
+          <form onSubmit={handleSignup} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
               <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                placeholder="Enter your password"
+                id="fullName"
+                type="text"
+                autoComplete="name"
+                value={fullName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFullName(e.target.value)}
+                placeholder="Enter your full name"
                 required
                 disabled={isLoading}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
             </div>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  disabled={isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your password"
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                "Create Account"
+              )}
+            </Button>
+          </form>
+        )}
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              type={showPassword ? "text" : "password"}
-              value={confirmPassword}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm your password"
-              required
-              disabled={isLoading}
-            />
-          </div>
+        {/* Phone signup */}
+        {mode === "phone" && !otpSent && (
+          <form onSubmit={handleSendOtp} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                autoComplete="tel"
+                value={phone}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)}
+                placeholder="Enter your phone number (+91...)"
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending OTP...
+                </>
+              ) : (
+                "Send OTP"
+              )}
+            </Button>
+          </form>
+        )}
+        {mode === "phone" && otpSent && (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="otp">OTP</Label>
+              <Input
+                id="otp"
+                type="text"
+                value={otp}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtp(e.target.value)}
+                placeholder="Enter OTP"
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Verify OTP"
+              )}
+            </Button>
+          </form>
+        )}
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Account...
-              </>
-            ) : (
-              "Create Account"
-            )}
+        <div className="my-4 flex items-center">
+          <div className="flex-grow border-t border-gray-200" />
+          <span className="mx-2 text-muted-foreground text-xs">OR</span>
+          <div className="flex-grow border-t border-gray-200" />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="outline"
+            className="w-full flex items-center justify-center"
+            onClick={() => handleOAuth("google")}
+            disabled={isLoading}
+            type="button"
+          >
+            <img src="/google.svg" alt="Google" className="h-5 w-5 mr-2" />
+            Continue with Google
           </Button>
+          <Button
+            variant="outline"
+            className="w-full flex items-center justify-center"
+            onClick={() => handleOAuth("facebook")}
+            disabled={isLoading}
+            type="button"
+          >
+            <Facebook className="h-5 w-5 mr-2 text-[#1877f3]" />
+            Continue with Facebook
+          </Button>
+        </div>
 
-          <div className="text-center text-sm">
-            <span className="text-muted-foreground">Already have an account? </span>
-            <Link href="/auth/login" className="text-primary hover:underline">
-              Sign in
-            </Link>
-          </div>
-        </form>
+        <div className="text-center text-sm mt-4">
+          <span className="text-muted-foreground">Already have an account? </span>
+          <Link href="/auth/login" className="text-primary hover:underline">
+            Sign in
+          </Link>
+        </div>
       </CardContent>
     </Card>
   )
