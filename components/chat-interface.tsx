@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -35,6 +37,57 @@ interface ChatMessage {
 
 interface ChatInterfaceProps {
   initialLanguage?: string
+}
+
+// Function to format chat response text for better readability
+const formatResponseText = (text: string): string => {
+  return text
+    // First clean up the text structure
+    .replace(/🌤️\s*CURRENT CONDITIONS:/gi, '\n## 🌤️ Current Weather Conditions\n\n')
+    .replace(/🌾\s*IMMEDIATE RECOMMENDATIONS:/gi, '\n## 🌾 Immediate Recommendations\n\n')
+    .replace(/📋\s*DETAILED ADVICE:/gi, '\n## 📋 Detailed Growing Guide\n\n')
+    .replace(/⚠️\s*PRECAUTIONS:/gi, '\n## ⚠️ Important Precautions\n\n')
+    .replace(/📅\s*TIMING:/gi, '\n## 📅 Best Timing\n\n')
+    .replace(/Additional Tips:/gi, '\n## 💡 Additional Tips\n\n')
+    
+    // Format numbered lists properly
+    .replace(/(\d+)\.\s\*\*(.*?)\*\*:\s*/g, '\n### $1. $2\n\n')
+    .replace(/(\d+)\.\s\*\*(.*?)\*\*:/g, '\n### $1. $2\n\n')
+    .replace(/(\d+)\.\s([^*])/g, '\n**$1.** $2')
+    
+    // Convert bullet points to proper markdown
+    .replace(/^\*\s+/gm, '- ')
+    .replace(/\n\*\s+/g, '\n- ')
+    
+    // Fix bold formatting
+    .replace(/\*\*(.*?)\*\*/g, '**$1**')
+    
+    // Add proper spacing around sections
+    .replace(/([.!?])\s+([🌤️🌾📋⚠️📅💡])/g, '$1\n\n$2')
+    .replace(/([.!?])\s+(##\s)/g, '$1\n\n$2')
+    
+    // Clean up multiple spaces and line breaks
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n /g, '\n')
+    
+    // Ensure proper line breaks before lists
+    .replace(/([.!?])\s*(\n- )/g, '$1\n$2')
+    .replace(/([.!?])\s*(\n\*\*\d+\.)/g, '$1\n$2')
+    
+    .trim()
+}
+
+// Enhanced function to format weather-related content
+const formatWeatherText = (text: string): string => {
+  return text
+    // Add proper markdown formatting for weather data
+    .replace(/Temperature[:\s]*(\d+)°C/gi, '🌡️ **Temperature:** $1°C')
+    .replace(/Humidity[:\s]*(\d+)%/gi, '💧 **Humidity:** $1%')
+    .replace(/Rainfall[:\s]*([^,\n.]+)/gi, '🌧️ **Rainfall:** $1')
+    .replace(/Wind speed[:\s]*([^,\n.]+)/gi, '💨 **Wind Speed:** $1')
+    .replace(/Pressure[:\s]*([^,\n.]+)/gi, '📊 **Pressure:** $1')
+    .replace(/Condition[:\s]*([^,\n.]+)/gi, '☁️ **Condition:** $1')
 }
 
 export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
@@ -162,7 +215,16 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
     const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition
     const recognition = new SpeechRecognition()
 
-    recognition.lang = language === "hi" ? "hi-IN" : language === "te" ? "te-IN" : "en-US"
+    recognition.lang =
+      language === "hi"
+        ? "hi-IN"
+        : language === "bn"
+          ? "bn-IN"
+          : language === "te"
+            ? "te-IN"
+            : language === "ta"
+              ? "ta-IN"
+              : "en-IN"
     recognition.continuous = false
     recognition.interimResults = false
 
@@ -200,7 +262,16 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
       }
 
       const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = language === "hi" ? "hi-IN" : language === "te" ? "te-IN" : "en-US"
+      utterance.lang =
+        language === "hi"
+          ? "hi-IN"
+          : language === "bn"
+            ? "bn-IN"
+            : language === "te"
+              ? "te-IN"
+              : language === "ta"
+                ? "ta-IN"
+                : "en-IN"
 
       utterance.onstart = () => setSpeakingMessageId(messageId)
       utterance.onend = () => setSpeakingMessageId(null)
@@ -230,6 +301,8 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
     const names = {
       en: "English",
       hi: "हिंदी",
+      bn: "বাংলা",
+      ta: "தமிழ்",
       te: "తెలుగు",
     }
     return names[lang as keyof typeof names] || "English"
@@ -239,6 +312,8 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
     const messages = {
       en: "Welcome to KrishiGPT! I'm here to help you with all your farming questions. Ask me about crops, pests, weather, soil health, or any agricultural practices.",
       hi: "KrishiGPT में आपका स्वागत है! मैं आपके सभी कृषि प्रश्नों में आपकी सहायता के लिए यहाँ हूँ। मुझसे फसलों, कीटों, मौसम, मिट्टी की सेहत या किसी भी कृषि पद्धति के बारे में पूछें।",
+      bn: "KrishiGPT তে স্বাগতম! আমি আপনার সমস্ত কৃষি প্রশ্নে সাহায্য করতে এখানে আছি। ফসল, কীটপতঙ্গ, আবহাওয়া, মাটির স্বাস্থ্য বা যেকোনো কৃষি পদ্ধতি সম্পর্কে আমাকে জিজ্ঞাসা করুন।",
+      ta: "KrishiGPT இல் வருக! உங்கள் அனைத்து விவசாய கேள்விகளிலும் உதவ நான் இங்கே இருக்கிறேன். பயிர்கள், பூச்சிகள், வானிலை, மண் ஆரோக்யம் அல்லது எந்த விவசாய நடைமுறைகள் பற்றியும் என்னிடம் கேளுங்கள்।",
       te: "KrishiGPT కి స్వాగతం! మీ అన్ని వ్యవసాయ ప్రశ్నలలో సహాయం చేయడానికి నేను ఇక్కడ ఉన్నాను. పంటలు, కీటకాలు, వాతావరణం, మట్టి ఆరోగ్యం లేదా ఏదైనా వ్యవసాయ పద్ధతుల గురించి నన్ను అడగండి.",
     }
     return messages[language as keyof typeof messages] || messages.en
@@ -248,6 +323,8 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
     const placeholders = {
       en: "Ask about crops, pests, weather, or farming techniques...",
       hi: "फसलों, कीटों, मौसम या खेती की तकनीकों के बारे में पूछें...",
+      bn: "ফসল, কীটপতঙ্গ, আবহাওয়া বা কৃষি কৌশল সম্পর্কে জিজ্ঞাসা করুন...",
+      ta: "பயிர்கள், பூச்சிகள், வானிலை அல்லது விவசாய நுட்பங்கள் பற்றி கேளுங்கள்...",
       te: "పంటలు, కీటకాలు, వాతావరణం లేదా వ్యవసాయ పద్ధతుల గురించి అడగండి...",
     }
     return placeholders[language as keyof typeof placeholders] || placeholders.en
@@ -266,7 +343,7 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          {["en", "hi", "te"].map((lang) => (
+          {["en", "hi", "bn", "ta", "te"].map((lang) => (
             <Button
               key={lang}
               variant={language === lang ? "default" : "outline"}
@@ -294,28 +371,60 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
                 className="text-xs cursor-pointer hover:bg-gray-200"
                 onClick={() => setCurrentMessage("How to grow rice in rainy weather?")}
               >
-                {language === "hi" ? "बारिश में धान" : language === "te" ? "వర్షంలో వరి" : "Rice in rain"}
+                {language === "hi" 
+                  ? "बारिश में धान" 
+                  : language === "bn" 
+                    ? "বৃষ্টিতে ধান" 
+                    : language === "te" 
+                      ? "వర్షంలో వరి" 
+                      : language === "ta"
+                        ? "மழையில் நெல்"
+                        : "Rice in rain"}
               </Badge>
               <Badge
                 variant="secondary"
                 className="text-xs cursor-pointer hover:bg-gray-200"
                 onClick={() => setCurrentMessage("What's the best time to plant tomatoes?")}
               >
-                {language === "hi" ? "टमाटर का समय" : language === "te" ? "టమాటో సమయం" : "Tomato timing"}
+                {language === "hi" 
+                  ? "टमाटर का समय" 
+                  : language === "bn" 
+                    ? "টমেটোর সময়" 
+                    : language === "te" 
+                      ? "టమాటో సమయం" 
+                      : language === "ta"
+                        ? "தக்காளி நேரம்"
+                        : "Tomato timing"}
               </Badge>
               <Badge
                 variant="secondary"
                 className="text-xs cursor-pointer hover:bg-gray-200"
                 onClick={() => setCurrentMessage("How to improve soil fertility?")}
               >
-                {language === "hi" ? "मिट्टी की उर्वरता" : language === "te" ? "మట్టి సారవంతత" : "Soil fertility"}
+                {language === "hi" 
+                  ? "मिट्टी की उर्वरता" 
+                  : language === "bn" 
+                    ? "মাটির উর্বরতা" 
+                    : language === "te" 
+                      ? "మట్టి సారవంతత" 
+                      : language === "ta"
+                        ? "மண் வளம்"
+                        : "Soil fertility"}
               </Badge>
               <Badge
                 variant="secondary"
                 className="text-xs cursor-pointer hover:bg-gray-200"
                 onClick={() => setCurrentMessage("Pest control for cotton crops")}
               >
-                {language === "hi" ? "कपास में कीट" : language === "te" ? "పత్తిలో కీటకాలు" : "Cotton pests"}
+                {language === "hi" 
+                  ? "कपास में कीट" 
+                  : language === "bn" 
+                    ? "তুলায় পোকা" 
+                    : language === "te" 
+                      ? "పత్తిలో కీటకాలు" 
+                      : language === "ta"
+                        ? "பருத்தியில் பூச்சி"
+                        : "Cotton pests"}
               </Badge>
             </div>
           </div>
@@ -356,9 +465,13 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
                           <span className="text-sm font-medium text-blue-800">
                             {language === "hi"
                               ? "मौसम की जानकारी"
-                              : language === "te"
-                                ? "వాతావరణ సమాచారం"
-                                : "Weather Information"}
+                              : language === "bn"
+                                ? "আবহাওয়ার তথ্য"
+                                : language === "te"
+                                  ? "వాతావరణ సమాచారం"
+                                  : language === "ta"
+                                    ? "வானிலை தகவல்"
+                                    : "Weather Information"}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-xs text-blue-700">
@@ -374,14 +487,59 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
                   )}
 
                   <Card className="bg-white border border-gray-200">
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="flex-1 text-sm leading-relaxed">{msg.response}</p>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 max-w-none chat-response">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              // Custom component styling for better readability
+                              p: ({ children }) => (
+                                <p className="mb-4 text-sm leading-relaxed text-gray-800 last:mb-0">{children}</p>
+                              ),
+                              h1: ({ children }) => (
+                                <h1 className="text-lg font-bold text-green-800 mb-4 mt-6 border-b-2 border-green-200 pb-2 first:mt-0">{children}</h1>
+                              ),
+                              h2: ({ children }) => (
+                                <h2 className="text-base font-bold text-green-700 mb-3 mt-5 border-l-4 border-green-300 pl-3 bg-green-50 py-2 rounded-r first:mt-0">{children}</h2>
+                              ),
+                              h3: ({ children }) => (
+                                <h3 className="text-sm font-semibold text-green-600 mb-2 mt-4 flex items-center gap-1">{children}</h3>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className="font-semibold text-green-800">{children}</strong>
+                              ),
+                              em: ({ children }) => (
+                                <em className="italic text-green-700">{children}</em>
+                              ),
+                              ul: ({ children }) => (
+                                <ul className="ml-4 mb-4 space-y-2">{children}</ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="ml-4 mb-4 space-y-2">{children}</ol>
+                              ),
+                              li: ({ children }) => (
+                                <li className="text-sm text-gray-800 leading-relaxed flex items-start gap-2">
+                                  <span className="text-green-600 mt-1">🌱</span>
+                                  <span className="flex-1">{children}</span>
+                                </li>
+                              ),
+                              code: ({ children }) => (
+                                <code className="bg-green-50 px-2 py-1 rounded text-xs font-mono text-green-800 border border-green-200">{children}</code>
+                              ),
+                              blockquote: ({ children }) => (
+                                <blockquote className="border-l-4 border-green-300 pl-4 ml-2 mb-4 text-gray-700 italic bg-green-50 py-3 rounded-r">{children}</blockquote>
+                              ),
+                            }}
+                          >
+                            {formatWeatherText(formatResponseText(msg.response))}
+                          </ReactMarkdown>
+                        </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleTextToSpeech(msg.response, msg.id)}
-                          className="flex-shrink-0"
+                          className="flex-shrink-0 mt-1"
                         >
                           {speakingMessageId === msg.id ? (
                             <VolumeX className="h-3 w-3" />
@@ -396,7 +554,15 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
                   {msg.relevantKnowledge && msg.relevantKnowledge.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       <span className="text-xs text-gray-500">
-                        {language === "hi" ? "स्रोत:" : language === "te" ? "మూలాలు:" : "Sources:"}
+                        {language === "hi" 
+                          ? "स्रोत:" 
+                          : language === "bn" 
+                            ? "উৎস:" 
+                            : language === "te" 
+                              ? "మూలాలు:" 
+                              : language === "ta"
+                                ? "ஆதாரம்:"
+                                : "Sources:"}
                       </span>
                       {msg.relevantKnowledge.map((knowledge, idx) => (
                         <Badge key={idx} variant="outline" className="text-xs">
@@ -424,9 +590,13 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
                     <span className="text-sm text-gray-600">
                       {language === "hi"
                         ? "KrishiGPT सोच रहा है..."
-                        : language === "te"
-                          ? "KrishiGPT ఆలోచిస్తోంది..."
-                          : "KrishiGPT is thinking..."}
+                        : language === "bn"
+                          ? "KrishiGPT ভাবছে..."
+                          : language === "te"
+                            ? "KrishiGPT ఆలోచిస్తోంది..."
+                            : language === "ta"
+                              ? "KrishiGPT யோசிக்கிறது..."
+                              : "KrishiGPT is thinking..."}
                     </span>
                   </div>
                 </CardContent>

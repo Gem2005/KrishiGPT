@@ -2,6 +2,8 @@
 
 import type React from "react"
 import { useState, useRef, useCallback, useEffect } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,6 +23,57 @@ interface SearchResult extends AgriculturalKnowledge {
     condition: string
     forecast: string
   }
+}
+
+// Function to format search result content for better readability
+const formatResponseText = (text: string): string => {
+  return text
+    // First clean up the text structure
+    .replace(/🌤️\s*CURRENT CONDITIONS:/gi, '\n## 🌤️ Current Weather Conditions\n\n')
+    .replace(/🌾\s*IMMEDIATE RECOMMENDATIONS:/gi, '\n## 🌾 Immediate Recommendations\n\n')
+    .replace(/📋\s*DETAILED ADVICE:/gi, '\n## 📋 Detailed Growing Guide\n\n')
+    .replace(/⚠️\s*PRECAUTIONS:/gi, '\n## ⚠️ Important Precautions\n\n')
+    .replace(/📅\s*TIMING:/gi, '\n## 📅 Best Timing\n\n')
+    .replace(/Additional Tips:/gi, '\n## 💡 Additional Tips\n\n')
+    
+    // Format numbered lists properly
+    .replace(/(\d+)\.\s\*\*(.*?)\*\*:\s*/g, '\n### $1. $2\n\n')
+    .replace(/(\d+)\.\s\*\*(.*?)\*\*:/g, '\n### $1. $2\n\n')
+    .replace(/(\d+)\.\s([^*])/g, '\n**$1.** $2')
+    
+    // Convert bullet points to proper markdown
+    .replace(/^\*\s+/gm, '- ')
+    .replace(/\n\*\s+/g, '\n- ')
+    
+    // Fix bold formatting
+    .replace(/\*\*(.*?)\*\*/g, '**$1**')
+    
+    // Add proper spacing around sections
+    .replace(/([.!?])\s+([🌤️🌾📋⚠️📅💡])/g, '$1\n\n$2')
+    .replace(/([.!?])\s+(##\s)/g, '$1\n\n$2')
+    
+    // Clean up multiple spaces and line breaks
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n /g, '\n')
+    
+    // Ensure proper line breaks before lists
+    .replace(/([.!?])\s*(\n- )/g, '$1\n$2')
+    .replace(/([.!?])\s*(\n\*\*\d+\.)/g, '$1\n$2')
+    
+    .trim()
+}
+
+// Enhanced function to format weather-related content
+const formatWeatherText = (text: string): string => {
+  return text
+    // Add proper markdown formatting for weather data
+    .replace(/Temperature[:\s]*(\d+)°C/gi, '🌡️ **Temperature:** $1°C')
+    .replace(/Humidity[:\s]*(\d+)%/gi, '💧 **Humidity:** $1%')
+    .replace(/Rainfall[:\s]*([^,\n.]+)/gi, '🌧️ **Rainfall:** $1')
+    .replace(/Wind speed[:\s]*([^,\n.]+)/gi, '💨 **Wind Speed:** $1')
+    .replace(/Pressure[:\s]*([^,\n.]+)/gi, '📊 **Pressure:** $1')
+    .replace(/Condition[:\s]*([^,\n.]+)/gi, '☁️ **Condition:** $1')
 }
 
 export function SearchInterface() {
@@ -327,9 +380,9 @@ export function SearchInterface() {
                 : language === "bn"
                   ? "ফসল, কীটপতঙ্গ, আবহাওয়া বা কৃষি কৌশল সম্পর্কে জিজ্ঞাসা করুন..."
                   : language === "ta"
-                    ? "பொறுத்து வேதியான மாதாவிகளை, பொருட்களை, வாதாவேதியான முறைகளை அல்லது கிட்டத்து முறைகளை கேட்கவும்..."
+                    ? "பயிர்கள், பூச்சிகள், வானிலை அல்லது விவசாய நுட்பங்கள் பற்றி கேளுங்கள்..."
                     : language === "te"
-                      ? "వాతావరణ సమాచారం"
+                      ? "పంటలు, కీటకాలు, వాతావరణం లేదా వ్యవసాయ పద్ధతుల గురించి అడగండి..."
                       : "Ask about crops, pests, weather, or farming techniques..."
             }
             value={searchQuery}
@@ -442,7 +495,52 @@ export function SearchInterface() {
                   </Button>
                 </div>
 
-                <p className="text-gray-700 mb-4 leading-relaxed">{result.content}</p>
+                <div className="max-w-none chat-response mb-4">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      // Custom component styling for better readability
+                      p: ({ children }) => (
+                        <p className="mb-4 text-sm leading-relaxed text-gray-800 last:mb-0">{children}</p>
+                      ),
+                      h1: ({ children }) => (
+                        <h1 className="text-lg font-bold text-green-800 mb-4 mt-6 border-b-2 border-green-200 pb-2 first:mt-0">{children}</h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="text-base font-bold text-green-700 mb-3 mt-5 border-l-4 border-green-300 pl-3 bg-green-50 py-2 rounded-r first:mt-0">{children}</h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="text-sm font-semibold text-green-600 mb-2 mt-4 flex items-center gap-1">{children}</h3>
+                      ),
+                      strong: ({ children }) => (
+                        <strong className="font-semibold text-green-800">{children}</strong>
+                      ),
+                      em: ({ children }) => (
+                        <em className="italic text-green-700">{children}</em>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="ml-4 mb-4 space-y-2">{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="ml-4 mb-4 space-y-2">{children}</ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="text-sm text-gray-800 leading-relaxed flex items-start gap-2">
+                          <span className="text-green-600 mt-1">🌱</span>
+                          <span className="flex-1">{children}</span>
+                        </li>
+                      ),
+                      code: ({ children }) => (
+                        <code className="bg-green-50 px-2 py-1 rounded text-xs font-mono text-green-800 border border-green-200">{children}</code>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="border-l-4 border-green-300 pl-4 ml-2 mb-4 text-gray-700 italic bg-green-50 py-3 rounded-r">{children}</blockquote>
+                      ),
+                    }}
+                  >
+                    {formatWeatherText(formatResponseText(result.content))}
+                  </ReactMarkdown>
+                </div>
 
                 <div className="flex flex-wrap gap-2 mb-3">
                   <Badge variant="secondary" className="text-xs">

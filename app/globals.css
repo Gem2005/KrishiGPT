@@ -126,3 +126,57 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
+
+/* Custom styles for enhanced chat interface */
+.chat-response {
+  line-height: 1.6;
+}
+
+.chat-response p {
+  margin-bottom: 0.75rem;
+}
+
+.chat-response p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-response ul {
+  margin: 0.75rem 0;
+  padding-left: 0;
+}
+
+.chat-response li {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.chat-response li:before {
+  content: "🌱";
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.875rem;
+}
+
+.chat-response strong {
+  color: #065f46;
+  font-weight: 600;
+}
+
+.chat-response em {
+  color: #047857;
+  font-style: italic;
+}
+
+/* Better spacing for weather and farming content */
+.weather-info .chat-response li:before {
+  content: "📊";
+}
+
+.farming-tips .chat-response li:before {
+  content: "🚜";
+}
+
+.crop-info .chat-response li:before {
+  content: "🌾";
+}
