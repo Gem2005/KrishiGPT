@@ -132,6 +132,15 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Cleanup speech synthesis on component unmount
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window && speakingMessageId) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [speakingMessageId])
+
   const handleSendMessage = async () => {
     if (!currentMessage.trim() || isLoading) return
 
@@ -251,33 +260,74 @@ export function ChatInterface({ initialLanguage = "en" }: ChatInterfaceProps) {
 
   const handleTextToSpeech = (text: string, messageId: string) => {
     if ("speechSynthesis" in window) {
+      // If clicking the same message that's currently speaking, stop it
       if (speakingMessageId === messageId) {
         window.speechSynthesis.cancel()
         setSpeakingMessageId(null)
         return
       }
 
+      // Stop any currently speaking message
       if (speakingMessageId) {
         window.speechSynthesis.cancel()
+        setSpeakingMessageId(null)
       }
 
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang =
-        language === "hi"
-          ? "hi-IN"
-          : language === "bn"
-            ? "bn-IN"
-            : language === "te"
-              ? "te-IN"
-              : language === "ta"
-                ? "ta-IN"
-                : "en-IN"
+      // Small delay to ensure previous speech is cancelled
+      setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.lang =
+          language === "hi"
+            ? "hi-IN"
+            : language === "bn"
+              ? "bn-IN"
+              : language === "te"
+                ? "te-IN"
+                : language === "ta"
+                  ? "ta-IN"
+                  : "en-IN"
 
-      utterance.onstart = () => setSpeakingMessageId(messageId)
-      utterance.onend = () => setSpeakingMessageId(null)
-      utterance.onerror = () => setSpeakingMessageId(null)
+        // Set rate and volume for better control
+        utterance.rate = 0.9
+        utterance.volume = 1
 
-      window.speechSynthesis.speak(utterance)
+        utterance.onstart = () => {
+          setSpeakingMessageId(messageId)
+        }
+        
+        utterance.onend = () => {
+          setSpeakingMessageId(null)
+        }
+        
+        utterance.onerror = () => {
+          setSpeakingMessageId(null)
+        }
+
+        // Fallback timeout to reset state if onend doesn't fire
+        const timeoutId = setTimeout(() => {
+          if (speakingMessageId === messageId) {
+            window.speechSynthesis.cancel()
+            setSpeakingMessageId(null)
+          }
+        }, text.length * 100 + 5000) // Rough estimate based on text length
+
+        // Clear timeout when speech ends naturally
+        const originalOnEnd = utterance.onend
+        utterance.onend = (event) => {
+          clearTimeout(timeoutId)
+          setSpeakingMessageId(null)
+          if (originalOnEnd) originalOnEnd.call(utterance, event)
+        }
+
+        const originalOnError = utterance.onerror
+        utterance.onerror = (event) => {
+          clearTimeout(timeoutId)
+          setSpeakingMessageId(null)
+          if (originalOnError) originalOnError.call(utterance, event)
+        }
+
+        window.speechSynthesis.speak(utterance)
+      }, 100)
     }
   }
 

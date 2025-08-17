@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Mic, Camera, Search, X, Loader2, Volume2, MapPin, Cloud } from "lucide-react"
+import { Mic, Camera, Search, X, Loader2, Volume2, VolumeX, MapPin, Cloud } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import type { AgriculturalKnowledge } from "@/lib/supabase/client"
 import LocationSelector from "./location-selector"
+import { VoiceDialog } from "./voice-dialog"
 
 interface SearchResult extends AgriculturalKnowledge {
   similarity?: number
@@ -86,9 +87,13 @@ export function SearchInterface() {
   const [language, setLanguage] = useState("en")
   const [userLocation, setUserLocation] = useState<string>("")
   const [showLocationSelector, setShowLocationSelector] = useState(false)
+  const [speakingResultId, setSpeakingResultId] = useState<string | null>(null)
+  const [showVoiceDialog, setShowVoiceDialog] = useState(false)
+  const [voiceStatus, setVoiceStatus] = useState<"initializing" | "listening" | "processing" | "error" | "no-speech">("initializing")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
 
   const initializeSpeechRecognition = useCallback(() => {
     if (recognitionRef.current) {
@@ -115,22 +120,45 @@ export function SearchInterface() {
 
       recognition.onstart = () => {
         setIsListening(true)
+        setVoiceStatus("listening")
       }
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript
+        setVoiceStatus("processing")
         setSearchQuery(transcript)
         setIsListening(false)
-        handleSearch(transcript)
+        setTimeout(() => {
+          setShowVoiceDialog(false)
+          handleSearch(transcript)
+        }, 1000) // Show processing for 1 second
       }
 
       recognition.onerror = (event) => {
         console.error("Speech recognition error:", event.error)
         setIsListening(false)
+        
+        if (event.error === 'no-speech') {
+          setVoiceStatus("no-speech")
+          setTimeout(() => {
+            setShowVoiceDialog(false)
+          }, 2000)
+        } else {
+          setVoiceStatus("error")
+          setTimeout(() => {
+            setShowVoiceDialog(false)
+          }, 2000)
+        }
       }
 
       recognition.onend = () => {
         setIsListening(false)
+        if (voiceStatus === "listening") {
+          setVoiceStatus("no-speech")
+          setTimeout(() => {
+            setShowVoiceDialog(false)
+          }, 2000)
+        }
       }
 
       recognitionRef.current = recognition
@@ -145,11 +173,29 @@ export function SearchInterface() {
     if (recognitionRef.current) {
       if (isListening) {
         recognitionRef.current.stop()
+        setShowVoiceDialog(false)
+        setVoiceStatus("initializing")
       } else {
-        recognitionRef.current.start()
+        setShowVoiceDialog(true)
+        setVoiceStatus("initializing")
+        
+        // Small delay to show initializing state
+        setTimeout(() => {
+          recognitionRef.current?.start()
+        }, 500)
       }
     } else {
-      alert("Speech recognition is not supported in your browser. Please use Chrome or Edge.")
+      const errorMessage = language === "hi" 
+        ? "आपका ब्राउज़र वॉयस रिकॉग्निशन को सपोर्ट नहीं करता। कृपया Chrome या Edge का उपयोग करें।"
+        : language === "bn"
+        ? "আপনার ব্রাউজার ভয়েস রিকগনিশন সমর্থন করে না। দয়া করে Chrome বা Edge ব্যবহার করুন।"
+        : language === "te"
+        ? "మీ బ్రౌజర్ వాయిస్ రికగ్నిషన్‌ను సపోర్ట్ చేయదు. దయచేసి Chrome లేదా Edge ఉపయోగించండి।"
+        : language === "ta"
+        ? "உங்கள் உலாவி குரல் அடையாளத்தை ஆதரிக்கவில்லை. தயவுசெய்து Chrome அல்லது Edge ஐப் பயன்படுத்தவும்।"
+        : "Speech recognition is not supported in your browser. Please use Chrome or Edge."
+      
+      alert(errorMessage)
     }
   }
 
@@ -303,9 +349,63 @@ export function SearchInterface() {
     }
   }
 
-  const speakText = (text: string) => {
-    if ("speechSynthesis" in window) {
+  const speakText = (text: string, resultId: string) => {
+    if (!("speechSynthesis" in window)) {
+      alert("Your browser doesn't support speech synthesis.")
+      return
+    }
+
+    // If currently speaking this result, force stop completely
+    if (speakingResultId === resultId) {
+      // Nuclear approach to stopping speech
+      const forceStop = () => {
+        window.speechSynthesis.cancel()
+        window.speechSynthesis.pause()
+        
+        // Multiple attempts to clear queue
+        for (let i = 0; i < 3; i++) {
+          setTimeout(() => {
+            window.speechSynthesis.cancel()
+            if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+              window.speechSynthesis.cancel()
+            }
+          }, i * 50)
+        }
+      }
+      
+      forceStop()
+      
+      // Reset state immediately and with delays
+      setSpeakingResultId(null)
+      currentUtteranceRef.current = null
+      
+      setTimeout(() => {
+        setSpeakingResultId(null)
+        currentUtteranceRef.current = null
+        forceStop() // Try again after delay
+      }, 100)
+      
+      setTimeout(() => {
+        setSpeakingResultId(null)
+        currentUtteranceRef.current = null
+        forceStop() // Final attempt
+      }, 300)
+      
+      return
+    }
+
+    // Stop any previous speech simply before starting new
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel()
+    }
+    setSpeakingResultId(null)
+
+    // Small delay to ensure cancellation is processed
+    setTimeout(() => {
       const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 0.9
+      utterance.pitch = 1.0
+      utterance.volume = 1.0
       utterance.lang =
         language === "hi"
           ? "hi-IN"
@@ -316,9 +416,98 @@ export function SearchInterface() {
               : language === "ta"
                 ? "ta-IN"
                 : "en-IN"
-      speechSynthesis.speak(utterance)
-    }
+      
+      utterance.onstart = () => {
+        setSpeakingResultId(resultId)
+      }
+
+      utterance.onend = () => {
+        setSpeakingResultId(null)
+        currentUtteranceRef.current = null
+      }
+
+      utterance.onerror = () => {
+        setSpeakingResultId(null)
+        currentUtteranceRef.current = null
+      }
+
+      currentUtteranceRef.current = utterance
+      window.speechSynthesis.speak(utterance)
+    }, 100) // Small delay to ensure previous speech is cancelled
   }
+
+  // Force stop speech on component mount and cleanup
+  useEffect(() => {
+    // Aggressively stop any existing speech on mount
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.pause()
+      // Force clear any pending utterances
+      setTimeout(() => {
+        while (window.speechSynthesis.pending || window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel()
+        }
+      }, 50)
+    }
+
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+        window.speechSynthesis.pause()
+        // Force clear on unmount
+        setTimeout(() => {
+          while (window.speechSynthesis.pending || window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel()
+          }
+        }, 50)
+      }
+    }
+  }, [])
+
+  // Global event listener for page visibility change (tab switch/refresh)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && "speechSynthesis" in window) {
+        // Force stop when tab becomes hidden
+        window.speechSynthesis.cancel()
+        window.speechSynthesis.pause()
+        setSpeakingResultId(null)
+        currentUtteranceRef.current = null
+      }
+    }
+
+    const handleBeforeUnload = () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+        window.speechSynthesis.pause()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
+
+  // Speech sync utility
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return
+
+    const checkSpeechStatus = () => {
+      if (!window.speechSynthesis.speaking && speakingResultId) {
+        setSpeakingResultId(null)
+        currentUtteranceRef.current = null
+      }
+    }
+
+    if (speakingResultId) {
+      const intervalId = setInterval(checkSpeechStatus, 500) // Check more frequently
+      return () => clearInterval(intervalId)
+    }
+  }, [speakingResultId])
 
   useEffect(() => {
     initializeSpeechRecognition()
@@ -498,8 +687,17 @@ export function SearchInterface() {
 
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-lg font-semibold text-cyan-800 mb-2">{result.title}</h3>
-                  <Button variant="ghost" size="sm" onClick={() => speakText(result.content)} className="p-1">
-                    <Volume2 className="w-4 h-4 text-gray-500" />
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => speakText(result.content, result.id)} 
+                    className={`p-1 ${speakingResultId === result.id ? 'bg-red-100 text-red-600' : ''}`}
+                  >
+                    {speakingResultId === result.id ? (
+                      <VolumeX className="w-4 h-4" />
+                    ) : (
+                      <Volume2 className="w-4 h-4 text-gray-500" />
+                    )}
                   </Button>
                 </div>
 
@@ -611,6 +809,19 @@ export function SearchInterface() {
           </p>
         </div>
       )}
+
+      <VoiceDialog
+        isOpen={showVoiceDialog}
+        onClose={() => {
+          setShowVoiceDialog(false)
+          setVoiceStatus("initializing")
+          if (recognitionRef.current && isListening) {
+            recognitionRef.current.stop()
+          }
+        }}
+        status={voiceStatus}
+        language={language}
+      />
 
       {showLocationSelector && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
