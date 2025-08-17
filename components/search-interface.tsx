@@ -175,7 +175,9 @@ export function SearchInterface() {
     try {
       const formData = new FormData()
       formData.append("image", selectedImage)
+      formData.append("textQuery", searchQuery || "") // Include text query if available
       formData.append("language", language)
+      formData.append("userLocation", userLocation || "")
 
       const response = await fetch("/api/search/image", {
         method: "POST",
@@ -185,7 +187,7 @@ export function SearchInterface() {
       if (response.ok) {
         const data = await response.json()
         setSearchResults(data.results || [])
-        setSearchQuery(data.description || "Image analysis")
+        setSearchQuery(data.query || "Image analysis")
       } else {
         console.error("Image search failed")
       }
@@ -284,7 +286,13 @@ export function SearchInterface() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    handleSearch()
+    
+    // If image is selected, prioritize image search
+    if (selectedImage) {
+      handleImageSearch()
+    } else if (searchQuery.trim()) {
+      handleSearch()
+    }
   }
 
   const clearImage = () => {
@@ -419,7 +427,7 @@ export function SearchInterface() {
               disabled={isSearching || (!searchQuery.trim() && !selectedImage)}
               className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg"
             >
-              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : selectedImage ? "Analyze Image" : "Search"}
             </Button>
           </div>
         </div>

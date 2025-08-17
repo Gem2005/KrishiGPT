@@ -6,7 +6,10 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "install-python-deps": "cd model && pip install -r requirements.txt",
+    "setup": "npm install && npm run install-python-deps",
+    "postinstall": "npm run install-python-deps"
   },
   "dependencies": {
     "@ai-sdk/google": "latest",

@@ -43,14 +43,27 @@ test_transforms = transforms.Compose([
 ])
 
 
-def predict_image(image: Image.Image) -> str:
+def predict_image(image: Image.Image) -> dict:
     image = image.convert("RGB")
     image = test_transforms(image).unsqueeze(0).to(device)
 
     with torch.no_grad():
         outputs = model(image)
-        _, predicted = torch.max(outputs, 1)
-        return idx_to_class[predicted.item()]
+        probabilities = torch.nn.functional.softmax(outputs, dim=1)
+        confidence, predicted = torch.max(probabilities, 1)
+        
+        return {
+            "prediction": idx_to_class[predicted.item()],
+            "confidence": float(confidence.item())
+        }
+
+# Function for direct script usage
+def predict_from_path(image_path: str) -> dict:
+    try:
+        image = Image.open(image_path)
+        return predict_image(image)
+    except Exception as e:
+        return {"error": str(e)}
 
 app = FastAPI()
 
@@ -58,9 +71,17 @@ app = FastAPI()
 async def predict(file: UploadFile = File(...)):
     image_bytes = await file.read()
     image = Image.open(io.BytesIO(image_bytes))
-    prediction = predict_image(image)
-    return {"prediction": prediction}
+    result = predict_image(image)
+    return result
 
-
+# CLI support
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    import sys
+    if len(sys.argv) == 2:
+        # Direct prediction mode
+        image_path = sys.argv[1]
+        result = predict_from_path(image_path)
+        print(json.dumps(result))
+    else:
+        # FastAPI server mode
+        uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
