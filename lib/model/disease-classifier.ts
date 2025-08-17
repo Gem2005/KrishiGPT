@@ -6,30 +6,85 @@ import { writeFile } from 'fs/promises'
 export interface DiseaseDetectionResult {
   prediction: string
   confidence?: number
+  top_predictions?: Array<{
+    disease: string
+    confidence: number
+  }>
   diseaseInfo?: {
     plant: string
     disease: string
     isHealthy: boolean
   }
+  service?: string
 }
 
 export class DiseaseClassifier {
   private modelPath: string
   private pythonScriptPath: string
+  private isProduction: boolean
+  private renderServiceUrl?: string
 
   constructor() {
     this.modelPath = path.join(process.cwd(), 'model')
     this.pythonScriptPath = path.join(this.modelPath, 'predict.py')
+    this.isProduction = process.env.NODE_ENV === 'production'
+    this.renderServiceUrl = process.env.RENDER_SERVICE_URL
   }
 
   async classifyImage(imageBuffer: Buffer): Promise<DiseaseDetectionResult> {
+    // Check if we should use remote service (production + render URL available)
+    if (this.isProduction && this.renderServiceUrl) {
+      return this.classifyImageRemote(imageBuffer)
+    }
+    
+    // Use local classification
+    return this.classifyImageLocal(imageBuffer)
+  }
+
+  private async classifyImageRemote(imageBuffer: Buffer): Promise<DiseaseDetectionResult> {
+    try {
+      const formData = new FormData()
+      const blob = new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' })
+      formData.append('file', blob, 'image.jpg')
+
+      const response = await fetch(`${this.renderServiceUrl}/predict`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error(`Remote service error: ${response.status}`)
+      }
+
+      const result = await response.json()
+      
+      if (result.success && result.prediction) {
+        const diseaseInfo = this.parsePrediction(result.prediction.disease)
+        
+        return {
+          prediction: result.prediction.disease,
+          confidence: result.prediction.confidence,
+          top_predictions: result.prediction.top_predictions,
+          diseaseInfo,
+          service: result.service || 'remote'
+        }
+      }
+      
+      throw new Error('Invalid response from remote service')
+    } catch (error) {
+      console.warn('Remote classification failed, falling back to local:', error)
+      return this.classifyImageLocal(imageBuffer)
+    }
+  }
+
+  private async classifyImageLocal(imageBuffer: Buffer): Promise<DiseaseDetectionResult> {
     return new Promise(async (resolve, reject) => {
       try {
         // Save the image temporarily
         const tempImagePath = path.join(this.modelPath, `temp_${Date.now()}.jpg`)
         await writeFile(tempImagePath, imageBuffer)
 
-        // Run Python prediction using main.py
+        // Run Python prediction using predict.py (CLI mode)
         const pythonProcess = spawn('python', [this.pythonScriptPath, tempImagePath], {
           cwd: this.modelPath
         })
@@ -66,12 +121,30 @@ export class DiseaseClassifier {
               return
             }
 
-            const diseaseInfo = this.parsePrediction(result.prediction)
+            // Handle both old and new response formats
+            let prediction: string
+            let confidence: number | undefined
+            let topPredictions: Array<{disease: string, confidence: number}> | undefined
+            
+            if (result.success && result.prediction) {
+              // New format from updated main.py
+              prediction = result.prediction.disease
+              confidence = result.prediction.confidence
+              topPredictions = result.prediction.top_predictions
+            } else {
+              // Old format fallback
+              prediction = result.prediction
+              confidence = result.confidence
+            }
+
+            const diseaseInfo = this.parsePrediction(prediction)
             
             resolve({
-              prediction: result.prediction,
-              confidence: result.confidence,
-              diseaseInfo
+              prediction,
+              confidence,
+              top_predictions: topPredictions,
+              diseaseInfo,
+              service: 'local'
             })
           } catch (e) {
             reject(new Error(`Failed to parse model output: ${output}`))

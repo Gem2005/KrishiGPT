@@ -7,9 +7,9 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "install-python-deps": "cd model && pip install -r requirements.txt",
-    "setup": "npm install && npm run install-python-deps",
-    "postinstall": "npm run install-python-deps"
+    "setup-local": "cd model && pip install -r requirements.txt",
+    "model:dev": "cd model && python main.py",
+    "dev:full": "concurrently \"npm run dev\" \"npm run model:dev\""
   },
   "dependencies": {
     "@ai-sdk/google": "latest",
@@ -227,6 +227,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.12",
     "typescript": "^5"
