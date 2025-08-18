@@ -2,6 +2,20 @@ import { type NextRequest, NextResponse } from "next/server"
 import { KrishiRAGChain } from "@/lib/langchain/rag-chain"
 import { WeatherService } from "@/lib/weather/service"
 
+function isViabilityQuestion(query: string): boolean {
+  const queryLower = query.toLowerCase()
+  
+  const viabilityIndicators = [
+    "should i grow", "should i plant", "should i cultivate",
+    "is it profitable", "is it worth", "economic viability",
+    "profitable to grow", "good to grow", "recommend growing",
+    "worth growing", "invest in", "start growing",
+    "क्या मुझे", "उगाना चाहिए", "फायदेमंद है", "लाभकारी है"
+  ]
+
+  return viabilityIndicators.some(indicator => queryLower.includes(indicator))
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { query, language = "en", userLocation } = await request.json()
@@ -41,13 +55,17 @@ export async function POST(request: NextRequest) {
       // Use LangChain RAG system to generate response
       console.log("Generating response using LangChain RAG...")
 
+      // Check if this is a viability question that would benefit from market analysis
+      const includeMarketAnalysis = isViabilityQuestion(query)
+      
       const aiResponse = await ragChain.generateResponse(query, {
         userLocation,
         language,
         weatherData,
+        includeMarketAnalysis,
       })
 
-      console.log("LangChain RAG response generated successfully")
+      console.log(`LangChain RAG response generated successfully (market analysis: ${includeMarketAnalysis})`)
 
       if (!aiResponse || aiResponse.trim().length === 0) {
         throw new Error("RAG system generated empty response")

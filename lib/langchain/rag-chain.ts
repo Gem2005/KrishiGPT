@@ -7,17 +7,20 @@ import { StringOutputParser } from "@langchain/core/output_parsers"
 import type { Document } from "@langchain/core/documents"
 import { KrishiVectorStore } from "./vector-store"
 import { WeatherService } from "../weather/service"
+import { MarketPriceService } from "../market/service"
 
 export interface RAGOptions {
   userLocation?: string
   language?: string
   conversationHistory?: string[]
   weatherData?: any
+  includeMarketAnalysis?: boolean
 }
 
 export class KrishiRAGChain {
   private vectorStore: KrishiVectorStore
   private weatherService: WeatherService
+  private marketPriceService: MarketPriceService
   private models: {
     groq?: ChatGroq
     openai?: ChatOpenAI
@@ -27,6 +30,7 @@ export class KrishiRAGChain {
   constructor() {
     this.vectorStore = new KrishiVectorStore()
     this.weatherService = new WeatherService()
+    this.marketPriceService = new MarketPriceService()
     this.models = this.initializeModels()
   }
 
@@ -77,13 +81,16 @@ export class KrishiRAGChain {
   private createPromptTemplate(language = "en"): PromptTemplate {
     const templates = {
       en: `You are KrishiGPT, an expert agricultural AI assistant helping farmers in India. 
-You have access to comprehensive agricultural knowledge and real-time weather data.
+You have access to comprehensive agricultural knowledge, real-time weather data, and current market prices.
 
 AGRICULTURAL KNOWLEDGE BASE:
 {context}
 
 REAL-TIME WEATHER & AGRICULTURAL CONDITIONS:
 {weather}
+
+MARKET PRICE ANALYSIS:
+{marketData}
 
 CONVERSATION HISTORY:
 {history}
@@ -93,50 +100,61 @@ FARMER'S QUESTION: {question}
 INSTRUCTIONS FOR COMPREHENSIVE RESPONSE:
 1. ANALYZE the current weather conditions and their impact on farming
 2. CORRELATE weather data with agricultural best practices from knowledge base
-3. PROVIDE specific, actionable advice tailored to the location and current conditions
-4. INCLUDE timing recommendations based on weather patterns
-5. SUGGEST preventive measures for weather-related risks
-6. RECOMMEND optimal farming activities for current conditions
+3. EVALUATE market prices and economic viability for crop recommendations
+4. PROVIDE specific, actionable advice tailored to the location and current conditions
+5. INCLUDE timing recommendations based on weather patterns and market trends
+6. SUGGEST preventive measures for weather-related risks
+7. RECOMMEND optimal farming activities considering both weather and market conditions
+8. ASSESS profitability when farmers ask "should I grow this crop?"
 
 RESPONSE GUIDELINES:
 - Start with immediate weather-based recommendations
+- Include market price analysis for crop viability decisions
+- Provide economic viability assessment for crop selection
 - Include specific quantities, timings, or methods when relevant
 - Address location-specific concerns and opportunities
 - Keep language simple and practical for farmers
 - Prioritize actionable advice over theoretical knowledge
 - If weather poses risks, emphasize protective measures
-- If conditions are favorable, suggest optimal activities
+- If conditions are favorable but prices are poor, suggest alternatives
+- Always consider both agronomic and economic factors
 
 RESPONSE FORMAT - MANDATORY STRUCTURE:
 You MUST format your response EXACTLY as follows with emojis and clear sections:
 
 🌤️ CURRENT CONDITIONS: [Brief weather summary and impact on farming]
 
-🌾 IMMEDIATE RECOMMENDATIONS: [Urgent actions to take based on current weather]
+💰 MARKET ANALYSIS: [Current prices, trends, and economic viability - ONLY if market data is available]
 
-📋 DETAILED ADVICE: [Step-by-step farming guidance with specific quantities and methods]
+🌾 IMMEDIATE RECOMMENDATIONS: [Urgent actions based on weather and market conditions]
 
-⚠️ PRECAUTIONS: [Weather-related risks and specific prevention measures]
+📋 DETAILED ADVICE: [Step-by-step farming guidance with economic considerations]
 
-📅 TIMING: [Best times for suggested activities with specific timeframes]
+⚠️ PRECAUTIONS: [Weather-related risks and market risks]
+
+📅 TIMING: [Best times for activities considering weather and market cycles]
 
 FORMATTING RULES:
 - Use bullet points (•) within sections for multiple items
 - Keep each section concise but actionable
-- Include specific numbers when relevant
+- Include specific numbers when relevant (prices, quantities, timeframes)
 - Write in simple, practical language
+- Include market analysis ONLY when relevant market data is provided
 - NO asterisks (*) or markdown formatting other than emojis
 
 Answer:`,
 
       hi: `आप KrishiGPT हैं, भारत के किसानों की मदद करने वाले एक विशेषज्ञ कृषि AI सहायक हैं।
-आपके पास व्यापक कृषि ज्ञान और वास्तविक समय का मौसम डेटा उपलब्ध है।
+आपके पास व्यापक कृषि ज्ञान, वास्तविक समय का मौसम डेटा और वर्तमान बाजार मूल्य उपलब्ध है।
 
 कृषि ज्ञान आधार:
 {context}
 
 वास्तविक समय मौसम और कृषि स्थितियां:
 {weather}
+
+बाजार मूल्य विश्लेषण:
+{marketData}
 
 बातचीत का इतिहास:
 {history}
@@ -146,29 +164,26 @@ Answer:`,
 व्यापक उत्तर के लिए निर्देश:
 1. वर्तमान मौसम स्थितियों और खेती पर उनके प्रभाव का विश्लेषण करें
 2. मौसम डेटा को ज्ञान आधार से कृषि सर्वोत्तम प्रथाओं के साथ जोड़ें
-3. स्थान और वर्तमान स्थितियों के अनुकूल विशिष्ट, कार्यान्वित करने योग्य सलाह प्रदान करें
-4. मौसम पैटर्न के आधार पर समय की सिफारिशें शामिल करें
-5. मौसम संबंधी जोखिमों के लिए निवारक उपाय सुझाएं
+3. फसल की सिफारिशों के लिए बाजार मूल्यों और आर्थिक व्यवहार्यता का मूल्यांकन करें
+4. स्थान और वर्तमान स्थितियों के अनुकूल विशिष्ट, कार्यान्वित करने योग्य सलाह प्रदान करें
+5. मौसम पैटर्न और बाजार रुझानों के आधार पर समय की सिफारिशें शामिल करें
+6. मौसम संबंधी जोखिमों के लिए निवारक उपाय सुझाएं
+7. "क्या मुझे यह फसल उगानी चाहिए?" जब किसान पूछें तो लाभप्रदता का आकलन करें
 
 उत्तर प्रारूप - अनिवार्य संरचना:
 आपको अपना उत्तर बिल्कुल इस प्रारूप में इमोजी और स्पष्ट खंडों के साथ देना होगा:
 
 🌤️ वर्तमान स्थितियां: [संक्षिप्त मौसम सारांश और खेती पर प्रभाव]
 
-🌾 तत्काल सिफारिशें: [वर्तमान मौसम के आधार पर तुरंत करने योग्य कार्य]
+💰 बाजार विश्लेषण: [वर्तमान मूल्य, रुझान और आर्थिक व्यवहार्यता - केवल जब बाजार डेटा उपलब्ध हो]
 
-📋 विस्तृत सलाह: [विशिष्ट मात्रा और विधियों के साथ चरणबद्ध कृषि मार्गदर्शन]
+🌾 तत्काल सिफारिशें: [मौसम और बाजार की स्थिति के आधार पर तुरंत करने योग्य कार्य]
 
-⚠️ सावधानियां: [मौसम संबंधी जोखिम और विशिष्ट रोकथाम उपाय]
+📋 विस्तृत सलाह: [आर्थिक विचारों के साथ चरणबद्ध कृषि मार्गदर्शन]
 
-📅 समय: [विशिष्ट समयसीमा के साथ सुझावित गतिविधियों के लिए सर्वोत्तम समय]
+⚠️ सावधानियां: [मौसम संबंधी जोखिम और बाजार जोखिम]
 
-प्रारूपण नियम:
-- खंडों के भीतर कई आइटमों के लिए बुलेट पॉइंट्स (•) का उपयोग करें
-- प्रत्येक खंड को संक्षिप्त लेकिन कार्यान्वित करने योग्य रखें
-- प्रासंगिक होने पर विशिष्ट संख्याओं को शामिल करें
-- सरल, व्यावहारिक भाषा में लिखें
-- इमोजी के अलावा कोई तारांकन (*) या मार्कडाउन फॉर्मेटिंग नहीं
+📅 समय: [मौसम और बाजार चक्र को ध्यान में रखते हुए गतिविधियों के लिए सर्वोत्तम समय]
 
 उत्तर:`,
 
@@ -611,6 +626,123 @@ ${this.generateFarmingRecommendations(weather, location)}`
     }
   }
 
+  private async getMarketContext(query: string, options: RAGOptions): Promise<string> {
+    if (!options.userLocation) {
+      return ""
+    }
+
+    try {
+      // Extract crop names from the query
+      const possibleCrops = this.extractCropNamesFromQuery(query)
+      
+      if (possibleCrops.length === 0) {
+        return ""
+      }
+
+      let marketContext = ""
+
+      // Check if this is a "should I grow" type question
+      const isViabilityQuestion = this.isViabilityQuestion(query)
+
+      for (const crop of possibleCrops) {
+        try {
+          if (isViabilityQuestion) {
+            // Get full profitability analysis for viability questions
+            const analysis = await this.marketPriceService.getCropProfitabilityAnalysis(crop, options.userLocation)
+            if (analysis) {
+              marketContext += `
+PROFITABILITY ANALYSIS FOR ${crop.toUpperCase()}:
+- Current Market Price: ₹${analysis.currentMarketPrice}/quintal
+- Estimated Production Cost: ₹${analysis.estimatedCost}/quintal
+- Profit Margin: ₹${analysis.profitMargin}/quintal
+- Profitability Score: ${analysis.profitabilityScore.toUpperCase()}
+- Economic Recommendation: ${analysis.recommendation}
+- Risk Factors: ${analysis.riskFactors.join(", ")}
+- Best Selling Period: ${analysis.bestSellingPeriod}
+- Alternative Crops to Consider: ${analysis.competitiveCrops.join(", ")}
+
+`
+            }
+          } else {
+            // Get basic market trends for general queries
+            const trends = await this.marketPriceService.getMarketTrends(crop, options.userLocation)
+            if (trends) {
+              marketContext += `${trends}\n\n`
+            }
+          }
+        } catch (cropError) {
+          console.warn(`Error getting market data for ${crop}:`, cropError)
+        }
+      }
+
+      return marketContext.trim()
+    } catch (error) {
+      console.error("Error getting market context:", error)
+      return ""
+    }
+  }
+
+  private extractCropNamesFromQuery(query: string): string[] {
+    const queryLower = query.toLowerCase()
+    
+    // Common crop names to look for
+    const cropNames = [
+      "rice", "wheat", "cotton", "sugarcane", "tomato", "onion", "potato", 
+      "maize", "soybean", "groundnut", "mustard", "chickpea", "barley",
+      "bajra", "jowar", "chili", "cabbage", "cauliflower", "brinjal",
+      "okra", "bitter gourd", "bottle gourd", "cucumber", "watermelon",
+      "mango", "banana", "papaya", "guava", "pomegranate", "grapes"
+    ]
+
+    const foundCrops: string[] = []
+
+    for (const crop of cropNames) {
+      if (queryLower.includes(crop)) {
+        foundCrops.push(crop)
+      }
+    }
+
+    // Also check for Hindi crop names and their English equivalents
+    const hindiCropMap: Record<string, string> = {
+      "धान": "rice",
+      "चावल": "rice", 
+      "गेहूं": "wheat",
+      "कपास": "cotton",
+      "गन्ना": "sugarcane",
+      "टमाटर": "tomato",
+      "प्याज": "onion",
+      "आलू": "potato",
+      "मक्का": "maize",
+      "सोयाबीन": "soybean",
+      "मूंगफली": "groundnut",
+      "सरसों": "mustard",
+      "चना": "chickpea",
+      "जौ": "barley"
+    }
+
+    for (const [hindi, english] of Object.entries(hindiCropMap)) {
+      if (queryLower.includes(hindi) && !foundCrops.includes(english)) {
+        foundCrops.push(english)
+      }
+    }
+
+    return foundCrops
+  }
+
+  private isViabilityQuestion(query: string): boolean {
+    const queryLower = query.toLowerCase()
+    
+    const viabilityIndicators = [
+      "should i grow", "should i plant", "should i cultivate",
+      "is it profitable", "is it worth", "economic viability",
+      "profitable to grow", "good to grow", "recommend growing",
+      "worth growing", "invest in", "start growing",
+      "क्या मुझे", "उगाना चाहिए", "फायदेमंद है", "लाभकारी है"
+    ]
+
+    return viabilityIndicators.some(indicator => queryLower.includes(indicator))
+  }
+
   private formatConversationHistory(history?: string[]): string {
     if (!history || history.length === 0) return "No previous conversation."
 
@@ -636,6 +768,7 @@ ${this.generateFarmingRecommendations(weather, location)}`
         {
           context: async (input: { question: string }) => await this.retrieveContext(input.question, options),
           weather: async () => await this.getWeatherContext(options.userLocation),
+          marketData: async (input: { question: string }) => await this.getMarketContext(input.question, options),
           history: () => this.formatConversationHistory(options.conversationHistory),
           question: new RunnablePassthrough(),
         },
@@ -673,6 +806,7 @@ ${this.generateFarmingRecommendations(weather, location)}`
     // Check if response already has proper emoji format
     const hasEmojiFormat = [
       '🌤️',
+      '💰',
       '🌾', 
       '📋',
       '⚠️',
@@ -699,6 +833,7 @@ ${this.generateFarmingRecommendations(weather, location)}`
     
     return {
       conditions: this.findConditionsContent(lines),
+      marketAnalysis: this.findMarketAnalysisContent(lines),
       recommendations: this.findRecommendationsContent(lines),
       advice: this.findAdviceContent(lines),
       precautions: this.findPrecautionsContent(lines),
@@ -716,6 +851,18 @@ ${this.generateFarmingRecommendations(weather, location)}`
       }
     }
     return "Current weather conditions are favorable for farming activities."
+  }
+
+  private findMarketAnalysisContent(lines: string[]): string {
+    // Look for market/price related content
+    const marketWords = ['price', 'market', 'profit', 'economic', 'cost', 'rupee', '₹', 'profitable', 'loss', 'margin']
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase()
+      if (marketWords.some(word => lowerLine.includes(word))) {
+        return line
+      }
+    }
+    return ""
   }
 
   private findRecommendationsContent(lines: string[]): string {
@@ -768,7 +915,19 @@ ${this.generateFarmingRecommendations(weather, location)}`
 
   private buildFormattedResponse(sections: any, language: string): string {
     const templates = {
-      en: `🌤️ CURRENT CONDITIONS: ${sections.conditions}
+      en: sections.marketAnalysis ? 
+        `🌤️ CURRENT CONDITIONS: ${sections.conditions}
+
+💰 MARKET ANALYSIS: ${sections.marketAnalysis}
+
+🌾 IMMEDIATE RECOMMENDATIONS: ${sections.recommendations}
+
+📋 DETAILED ADVICE: ${sections.advice}
+
+⚠️ PRECAUTIONS: ${sections.precautions}
+
+📅 TIMING: ${sections.timing}` :
+        `🌤️ CURRENT CONDITIONS: ${sections.conditions}
 
 🌾 IMMEDIATE RECOMMENDATIONS: ${sections.recommendations}
 
@@ -778,7 +937,19 @@ ${this.generateFarmingRecommendations(weather, location)}`
 
 📅 TIMING: ${sections.timing}`,
 
-      hi: `🌤️ वर्तमान स्थितियां: ${sections.conditions}
+      hi: sections.marketAnalysis ?
+        `🌤️ वर्तमान स्थितियां: ${sections.conditions}
+
+💰 बाजार विश्लेषण: ${sections.marketAnalysis}
+
+🌾 तत्काल सिफारिशें: ${sections.recommendations}
+
+📋 विस्तृत सलाह: ${sections.advice}
+
+⚠️ सावधानियां: ${sections.precautions}
+
+📅 समय: ${sections.timing}` :
+        `🌤️ वर्तमान स्थितियां: ${sections.conditions}
 
 🌾 तत्काल सिफारिशें: ${sections.recommendations}
 
@@ -788,7 +959,19 @@ ${this.generateFarmingRecommendations(weather, location)}`
 
 📅 समय: ${sections.timing}`,
 
-      te: `🌤️ ప్రస్తుత పరిస్థితులు: ${sections.conditions}
+      te: sections.marketAnalysis ?
+        `🌤️ ప్రస్తుత పరిస్థితులు: ${sections.conditions}
+
+💰 మార్కెట్ విశ్లేషణ: ${sections.marketAnalysis}
+
+🌾 తక్షణ సిఫార్సులు: ${sections.recommendations}
+
+📋 వివరణాత్మక సలహా: ${sections.advice}
+
+⚠️ జాగ్రత్తలు: ${sections.precautions}
+
+📅 సమయం: ${sections.timing}` :
+        `🌤️ ప్రస్తుత పరిస్థితులు: ${sections.conditions}
 
 🌾 తక్షణ సిఫార్సులు: ${sections.recommendations}
 
@@ -798,7 +981,19 @@ ${this.generateFarmingRecommendations(weather, location)}`
 
 📅 సమయం: ${sections.timing}`,
 
-      bn: `🌤️ বর্তমান পরিস্থিতি: ${sections.conditions}
+      bn: sections.marketAnalysis ?
+        `🌤️ বর্তমান পরিস্থিতি: ${sections.conditions}
+
+💰 বাজার বিশ্লেষণ: ${sections.marketAnalysis}
+
+🌾 তাৎক্ষণিক সুপারিশ: ${sections.recommendations}
+
+📋 বিস্তারিত পরামর্শ: ${sections.advice}
+
+⚠️ সতর্কতা: ${sections.precautions}
+
+📅 সময়: ${sections.timing}` :
+        `🌤️ বর্তমান পরিস্থিতি: ${sections.conditions}
 
 🌾 তাৎক্ষণিক সুপারিশ: ${sections.recommendations}
 
@@ -808,7 +1003,19 @@ ${this.generateFarmingRecommendations(weather, location)}`
 
 📅 সময়: ${sections.timing}`,
 
-      ta: `🌤️ தற்போதைய நிலைமைகள்: ${sections.conditions}
+      ta: sections.marketAnalysis ?
+        `🌤️ தற்போதைய நிலைமைகள்: ${sections.conditions}
+
+💰 சந்தை பகுப்பாய்வு: ${sections.marketAnalysis}
+
+🌾 உடனடி பரிந்துரைகள்: ${sections.recommendations}
+
+📋 விரிவான ஆலோசனை: ${sections.advice}
+
+⚠️ முன்னெச்சரிக்கைகள்: ${sections.precautions}
+
+📅 நேரம்: ${sections.timing}` :
+        `🌤️ தற்போதைய நிலைமைகள்: ${sections.conditions}
 
 🌾 உடனடி பரிந்துரைகள்: ${sections.recommendations}
 

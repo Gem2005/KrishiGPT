@@ -12,6 +12,7 @@ import { Mic, Camera, Search, X, Loader2, Volume2, VolumeX, MapPin, Cloud } from
 import { supabase } from "@/lib/supabase/client"
 import type { AgriculturalKnowledge } from "@/lib/supabase/client"
 import LocationSelector from "./location-selector"
+import EnhancedLocationSelector from "./enhanced-location-selector"
 import { VoiceDialog } from "./voice-dialog"
 
 interface SearchResult extends AgriculturalKnowledge {
@@ -90,6 +91,8 @@ export function SearchInterface() {
   const [speakingResultId, setSpeakingResultId] = useState<string | null>(null)
   const [showVoiceDialog, setShowVoiceDialog] = useState(false)
   const [voiceStatus, setVoiceStatus] = useState<"initializing" | "listening" | "processing" | "error" | "no-speech">("initializing")
+  const [hasCompletedSetup, setHasCompletedSetup] = useState(false)
+  const [showInitialSetup, setShowInitialSetup] = useState(true)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
@@ -513,6 +516,36 @@ export function SearchInterface() {
     initializeSpeechRecognition()
   }, [initializeSpeechRecognition])
 
+  // Check if initial setup is needed
+  useEffect(() => {
+    const savedLanguage = localStorage.getItem("krishigpt-language")
+    const savedLocation = localStorage.getItem("krishigpt-location")
+    
+    if (savedLanguage && savedLocation) {
+      setLanguage(savedLanguage)
+      setUserLocation(savedLocation)
+      setHasCompletedSetup(true)
+      setShowInitialSetup(false)
+    } else {
+      setShowInitialSetup(true)
+    }
+  }, [])
+
+  const handleInitialSetup = (location: { state: string; city: string }) => {
+    const locationString = `${location.city}, ${location.state}`
+    setUserLocation(locationString)
+    setHasCompletedSetup(true)
+    setShowInitialSetup(false)
+    
+    // Save to localStorage for future visits
+    localStorage.setItem("krishigpt-language", language)
+    localStorage.setItem("krishigpt-location", locationString)
+  }
+
+  const handleInitialLanguageSelect = (newLanguage: string) => {
+    setLanguage(newLanguage)
+  }
+
   const handleLocationSelect = (location: { state: string; city: string }) => {
     const locationString = `${location.city}, ${location.state}`
     console.log("Location selected:", locationString)
@@ -534,6 +567,37 @@ export function SearchInterface() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      {/* Initial Setup - Language and Location Selection */}
+      {showInitialSetup && (
+        <EnhancedLocationSelector
+          onLocationSelect={handleInitialSetup}
+          onClose={() => {
+            // Don't allow closing without completing setup
+            const confirmSkip = window.confirm(
+              language === "hi" 
+                ? "बेहतर सेवा के लिए भाषा और स्थान चुनना आवश्यक है। क्या आप वाकई छोड़ना चाहते हैं?"
+                : language === "bn"
+                ? "ভাল সেবার জন্য ভাষা এবং অবস্থান নির্বাচন প্রয়োজন। আপনি কি সত্যিই এড়িয়ে যেতে চান?"
+                : language === "te"
+                ? "మెరుగైన సేవ కోసం భాష మరియు స్థానం ఎంపిక అవసరం. మీరు నిజంగా దాటవేయాలనుకుంటున్నారా?"
+                : language === "ta"
+                ? "சிறந்த சேவைக்கு மொழி மற்றும் இருப்பிடத் தேர்வு அவசியம். நீங்கள் உண்மையில் தவிர்க்க விரும்புகிறீர்களா?"
+                : "Language and location selection is required for better service. Do you really want to skip?"
+            )
+            if (confirmSkip) {
+              setShowInitialSetup(false)
+              setHasCompletedSetup(true)
+            }
+          }}
+          showLanguageSelector={true}
+          initialLanguage={language}
+          onLanguageSelect={handleInitialLanguageSelect}
+        />
+      )}
+
+      {/* Main Interface - Only show after setup is complete */}
+      {!showInitialSetup && (
+        <>
       <div className="mb-6">
         <div className="flex flex-wrap gap-2">
           {[
@@ -827,6 +891,8 @@ export function SearchInterface() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <LocationSelector onLocationSelect={handleLocationSelect} onClose={() => setShowLocationSelector(false)} />
         </div>
+      )}
+        </>
       )}
     </div>
   )

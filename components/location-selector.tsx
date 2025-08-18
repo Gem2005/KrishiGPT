@@ -2,12 +2,23 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { MapPin, Search } from "lucide-react"
+import { MapPin, Search, Globe } from "lucide-react"
 
 interface LocationSelectorProps {
   onLocationSelect: (location: { state: string; city: string }) => void
   onClose: () => void
+  showLanguageSelector?: boolean
+  initialLanguage?: string
+  onLanguageSelect?: (language: string) => void
 }
+
+const LANGUAGES = [
+  { code: "en", name: "English", nativeName: "English" },
+  { code: "hi", name: "Hindi", nativeName: "हिंदी" },
+  { code: "bn", name: "Bengali", nativeName: "বাংলা" },
+  { code: "te", name: "Telugu", nativeName: "తెలుగు" },
+  { code: "ta", name: "Tamil", nativeName: "தமிழ்" },
+]
 
 const INDIAN_STATES = [
   "Andhra Pradesh",
